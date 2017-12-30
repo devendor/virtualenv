@@ -349,7 +349,7 @@ def copyfile(src, dest, symlink=True):
     if symlink and hasattr(os, 'symlink') and not is_win:
         logger.info('Symlinking %s', dest)
         try:
-            os.symlink(srcpath, dest)
+            relsymlink(srcpath, dest)
         except (OSError, NotImplementedError):
             logger.info('Symlinking failed, copying to %s', dest)
             copyfileordir(src, dest, symlink)
@@ -1386,7 +1386,7 @@ def install_python(home_dir, lib_dir, inc_dir, bin_dir, site_packages, clear, sy
             if os.path.exists(full_pth):
                 os.unlink(full_pth)
             if symlink:
-                os.symlink(py_executable_base, full_pth)
+                relsymlink(py_executable_base, full_pth)
             else:
                 copyfile(py_executable, full_pth, symlink)
 
@@ -1483,7 +1483,10 @@ def install_files(home_dir, bin_dir, prompt, files):
     for name, content in files.items():
         content = content.replace('__VIRTUAL_PROMPT__', prompt or '')
         content = content.replace('__VIRTUAL_WINPROMPT__', prompt or '(%s)' % vname)
-        content = content.replace('__VIRTUAL_ENV__', home_dir)
+        if name == "activate":
+            content = content.replace('"__VIRTUAL_ENV__"', '`readlink --canonicalize  $(dirname ${BASH_SOURCE})/..`')
+        else:
+            content = content.replace('__VIRTUAL_ENV__', home_dir)
         content = content.replace('__VIRTUAL_NAME__', vname)
         content = content.replace('__BIN_NAME__', os.path.basename(bin_dir))
         writefile(os.path.join(bin_dir, name), content)
@@ -1557,9 +1560,16 @@ def fix_lib64(lib_dir, symlink=True):
     if os.path.lexists(lib64_link):
         return
     if symlink:
-        os.symlink('lib', lib64_link)
+        relsymlink('lib', lib64_link)
     else:
         copyfile('lib', lib64_link)
+
+def relsymlink(source,link_name):
+    if len(source) > 0 and source[0] == "/":
+        relsource = os.path.relpath(os.path.abspath(source),os.path.abspath(link_name))
+    else:
+        relsource = source
+    return os.symlink(relsource,link_name)
 
 def resolve_interpreter(exe):
     """
